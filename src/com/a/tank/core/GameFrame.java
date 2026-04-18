@@ -1,16 +1,8 @@
-/*
-* 开发日志：AI的随机游走和攻击
-*
-*
-*
-* */
-
-
-
 package com.a.tank.core;
 
 import com.a.tank.entity.Bullet;
 import com.a.tank.entity.tank;
+import com.a.tank.entity.wall;
 import com.a.tank.enums.Direction;
 
 import javax.swing.*;
@@ -31,10 +23,53 @@ public class GameFrame extends JFrame {
         tank mytank = new tank(400, 550, 3, UP, false, true);
         java.util.List<Bullet> bullets = new java.util.ArrayList<>(); //子弹数组
         java.util.List<tank> enemies = new java.util.ArrayList<>(); //敌方数组
+        public static java.util.List<wall> walls = new java.util.ArrayList<>(); //随机生成墙面数组
+        //第一版墙生成方案：随机生成
+//        public void creatwall(){ //界面随机生成+显示墙
+//            walls.clear();
+//            java.util.Random r = new java.util.Random(); //生成随机数
+//            for(int i = 0; i <800; i+= 30){
+//                for(int j = 100; j < 500; j+= 30){
+//                    if(r.nextInt(100) < 15){
+//                        walls.add(new wall(i, j));
+//                    }
+//                }
+//            }
+//
+//        }
+        //第二版：线性墙面
+        public void creatwall(){
+            walls.clear();
+            java.util.Random r = new java.util.Random();
+            for(int n = 0; n < 15; n++){
+
+                //随机起点（网格化坐标，必须是30的倍数）
+                int startX = r.nextInt(25)*30;
+                int startY = r.nextInt((12)+4) * 30;
+                int length = r.nextInt(6)+3;
+                boolean horizontal = r.nextBoolean(); //随机方向0横1竖
+                for (int i = 0; i < length; i++) {
+                    int currX = horizontal ? startX + (i * 30) : startX;
+                    int currY = horizontal ? startY : startY + (i * 30);
+
+                    // 越界检查
+                    if (currX < 770 && currY < 550) {
+                        walls.add(new wall(currX, currY));
+                    }
+                }
+            }
+            walls.removeIf(w -> new Rectangle(300, 400, 200, 200).intersects(w.getRect()));
+            for (tank e : enemies) {
+                // 给敌人也留出 60x60 的安全区（比坦克略大，防止卡住）
+                Rectangle enemyArea = new Rectangle(e.x - 15, e.y - 15, 60, 60);
+                walls.removeIf(w -> enemyArea.intersects(w.getRect()));
+            }
+        }
         public void launch() {
             for(int i = 0; i <5; i++){
-                enemies.add(new tank(100 + i *80, 200, 2,DOWN, true, true)); //并行排列，方向随机
+                enemies.add(new tank(110 + i *80, 200, 5,DOWN, true, true)); //并行排列，方向随机
             }
+            creatwall();
 //            System.out.println("初始化敌人数：" + enemies.size());
             setTitle("坦克大战");
             setSize(800, 600);
@@ -109,11 +144,15 @@ public class GameFrame extends JFrame {
             setVisible(true);
             new Thread(() -> {
                 while (true) {
-                    mytank.move();
-                    repaint(); // 不断呼叫系统：快来重新执行 paint！
-                    try {
-                        Thread.sleep(20); // 每秒刷新约50次
-                    } catch (Exception e) {}
+                    if(mytank.live) mytank.move();
+
+                    // 遍历所有机器人，统一移动
+                    for(tank e : enemies) {
+                        if(e.live) e.move();
+                    }
+
+                    repaint();
+                    try { Thread.sleep(20); } catch (Exception e) {}
                 }
             }).start();
 
@@ -132,33 +171,48 @@ public class GameFrame extends JFrame {
             if(mytank != null){
                 mytank.draw(goff);
             }
+            for(int k = 0; k <walls.size(); k++){
+                walls.get(k).draw(goff);
+            }
             for(int i = 0; i < bullets.size(); i++){
                 Bullet b = bullets.get(i);
-                for(int j = 0; j < enemies.size(); j++){
-                    tank e = enemies.get(j);
-
-                    // 判定：如果子弹矩形 和 坦克矩形 重叠
-                    if(b.robot == false){
-                        if(b.getRect().intersects(e.getRect())){
-                            b.live = false;    // 子弹标记为死亡
-                            e.live = false;    // 敌人标记为死亡
+                if(!b.live) continue;
+                if(b.robot){
+                    if(mytank.live && b.getRect().intersects(mytank.getRect())){
+                        b.live = false;
+                        mytank.live =false;
+                        System.out.println("你被击中了！");
+                    }
+                }else{
+                    for(int j = 0; j < enemies.size(); j++){
+                        tank e = enemies.get(j);
+                        if(e.live && b.getRect().intersects(e.getRect())){
+                            b.live = false;
+                            e.live = false;
                             System.out.println("击中敌人！");
+                            break;
                         }
                     }
-
+                }
+                for(int j = 0; j < walls.size(); j++){
+                    if(b.getRect().intersects(walls.get(j).getRect())){
+                        b.live = false;
+                        break;
+                    }
+                }
+            }
+            for (int i = 0; i < bullets.size(); i++) {
+                Bullet b = bullets.get(i);
+                if (b.live) {
+                    b.draw(goff);
+                } else {
+                    bullets.remove(i);
+                    i--;
                 }
             }
             //更新：检验当前子弹是否为敌人子弹，如果是，则检验是都撞到玩家
             // 绘制并清理子弹的正确逻辑
-            for (int i = 0; i < bullets.size(); i++) {
-                Bullet b = bullets.get(i);
-                if (b.live) {
-                    b.draw(goff); // 只要活着就画出来，管它是敌是我的
-                } else {
-                    bullets.remove(i); // 只有死了才移除
-                    i--;
-                }
-            }
+
             for(int i = 0; i < enemies.size(); i++){
                 tank it = enemies.get(i);
                 if(it.live){
