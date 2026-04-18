@@ -7,15 +7,17 @@ import java.awt.*;
 import static java.nio.file.Files.move;
 
 public class Bullet {
+    public boolean robot;
     public int x, y;
     public Direction dir;
-    public int speed = 1;
+    public int speed = 10;
     public boolean live = true; // 判断子弹是否出界
 
-    public Bullet(int x, int y, Direction dir) {
+    public Bullet(int x, int y, Direction dir, boolean robot) {
         this.x = x;
         this.y = y;
         this.dir = dir;
+        this.robot = robot;
     }
 
     public void draw(Graphics g){
